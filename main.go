@@ -1,6 +1,7 @@
 package main
 
 import (
+	"embed"
 	"flag"
 	"fmt"
 	"os"
@@ -9,25 +10,40 @@ import (
 	"time"
 )
 
-func playSound(soundFile string) {
-	var cmd *exec.Cmd
+var soundFiles embed.FS
 
-	if _, err := os.Stat(soundFile); os.IsNotExist(err) {
-		fmt.Println("Audio file not found:", soundFile)
+func playSound(filename string) {
+	data, err := soundFiles.ReadFile("sounds/" + filename)
+	if err != nil {
+		fmt.Println("Error reading embedded sound file:", err)
 		return
 	}
 
+	tmpFile, err := os.CreateTemp("", "sound-*.mp3")
+	if err != nil {
+		fmt.Println("Error creating temp file:", err)
+		return
+	}
+	defer os.Remove(tmpFile.Name())
+
+	tmpFile.Write(data)
+	tmpFile.Close()
+
+	filename = tmpFile.Name()
+
+	var cmd *exec.Cmd
 	switch runtime.GOOS {
-	case "darwin": // macOS
-		cmd = exec.Command("afplay", soundFile)
+	case "darwin":
+		cmd = exec.Command("afplay", filename)
 	case "linux":
-		cmd = exec.Command("aplay", soundFile) // Or "play"
+		cmd = exec.Command("aplay", filename)
 	case "windows":
-		cmd = exec.Command("powershell", "-c", "(New-Object Media.SoundPlayer '"+soundFile+"').PlaySync();")
+		cmd = exec.Command("powershell", "-c", "(New-Object Media.SoundPlayer '"+filename+"').PlaySync();")
 	default:
 		fmt.Println("Unsupported OS for playing audio.")
 		return
 	}
+
 	cmd.Start()
 }
 
@@ -41,12 +57,12 @@ func pingHost(host string, interval int, alertType string) {
 		if err := cmd.Run(); err == nil {
 			fmt.Println("Host is up!")
 			if alertType == "up" {
-				playSound("up-audio.mp3")
+				playSound("upAlert.mp3")
 			}
 		} else {
 			fmt.Println("Host is down!")
 			if alertType == "down" {
-				playSound("down-audio.mp3")
+				playSound("downAlert.mp3")
 			}
 		}
 		time.Sleep(time.Duration(interval) * time.Second)
